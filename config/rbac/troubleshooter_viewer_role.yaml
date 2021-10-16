@@ -1,0 +1,20 @@
+# permissions for end users to view troubleshooters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: troubleshooter-viewer-role
+rules:
+- apiGroups:
+  - clusterops.simeonpoot.nl
+  resources:
+  - troubleshooters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - clusterops.simeonpoot.nl
+  resources:
+  - troubleshooters/status
+  verbs:
+  - get

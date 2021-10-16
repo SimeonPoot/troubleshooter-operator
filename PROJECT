@@ -1,0 +1,16 @@
+domain: simeonpoot.nl
+layout:
+- go.kubebuilder.io/v3
+projectName: troubleshooter-operator
+repo: github.com/simeonpoot/troubleshooter-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: simeonpoot.nl
+  group: clusterops
+  kind: Troubleshooter
+  path: github.com/simeonpoot/troubleshooter-operator/api/v1
+  version: v1
+version: "3"

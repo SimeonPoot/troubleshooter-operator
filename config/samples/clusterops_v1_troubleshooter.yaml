@@ -1,0 +1,10 @@
+apiVersion: clusterops.simeonpoot.nl/v1
+kind: Troubleshooter
+metadata:
+  name: troubleshooter-sample2
+  namespace: test
+spec:
+  # Add fields here
+  foo: bar
+  image: "nginx"
+  podName: "baz"
