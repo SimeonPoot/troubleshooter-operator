@@ -68,7 +68,7 @@ func (r *TroubleshooterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		apierrors.IsNotFound(err)
 		return ctrl.Result{}, nil
 	}
-	log.Info("We've got the Troubleshooter CR, creating POD")
+	log.Info("We've got the Troubleshooter CR, continuing")
 
 	// TODO: Use labelselector to collect/filter pods?
 	// TODO: create function for it.
@@ -78,7 +78,7 @@ func (r *TroubleshooterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		// LabelSelector: r.ClusterLabelSelector,
 	})
 	if err != nil {
-		log.Info("unable to get cluster Secrets (retried)", "error", err)
+		log.Info("unable to get Pods", "error", err)
 		return ctrl.Result{}, nil
 	}
 
