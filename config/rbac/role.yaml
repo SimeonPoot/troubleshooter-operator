@@ -7,6 +7,15 @@ metadata:
   name: manager-role
 rules:
 - resources:
+  - namespaces
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- resources:
   - pods
   verbs:
   - create

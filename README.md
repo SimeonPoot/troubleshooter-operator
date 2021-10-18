@@ -32,11 +32,12 @@ The CRDs contain at the minimum:
 - timeToLive > the amount of time that the pod should be UP and running. With a maximum of 2hr? (UTC)
 - saveToDisk > setup PVC's to save the troubleshooter session to disk; this needs a PV with ReclaimSetting Retain, to get the logs. 
   - name of PVC 
-  - Perhaps log to STDOUT > let something like filebeat pick the logs up. 
+    - Perhaps log to STDOUT > let something like filebeat pick the logs up. 
 - [optional] runAsNonRoot > default is non-root (if this can be managed by setting up container)
 - [optional] runAsUser > the link the container with a user (set sudo privileges etc.)
 - METRICS!
 
+- Optional > create a temporary namespace (incident-response/uid)
 
 ## Design
 

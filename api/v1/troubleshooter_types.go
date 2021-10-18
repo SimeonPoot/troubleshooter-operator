@@ -29,14 +29,15 @@ type TroubleshooterSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of Troubleshooter. Edit troubleshooter_types.go to remove/update
-	Foo     string  `json:"foo,omitempty"`
-	Image   string  `json:"image,omitempty"`
-	PodName string  `json:"podName,omitempty"`
-	Session Session `json:"Session,omitempty"`
+	Foo             string  `json:"foo,omitempty"`
+	Image           string  `json:"image,omitempty"`
+	PodName         string  `json:"podName,omitempty"`
+	Session         Session `json:"Session,omitempty"`
+	CreateNamespace bool    `json:"createNamespace,omitempty"`
 }
 
 type Session struct {
-	Duration string `json:"duration,omitempty"`
+	Duration int    `json:"duration"`
 	TimeLeft string `json:"timeleft,omitempty"`
 }
 

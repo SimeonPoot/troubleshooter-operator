@@ -8,3 +8,6 @@ spec:
   foo: bar
   image: "nginx"
   podName: "baz"
+  Session:
+    duration: 2 # in Minutes/ TODO: we need to configure a default
+  createNamespace: true

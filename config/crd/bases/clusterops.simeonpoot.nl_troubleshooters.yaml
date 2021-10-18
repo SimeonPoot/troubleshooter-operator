@@ -39,10 +39,14 @@ spec:
               Session:
                 properties:
                   duration:
-                    type: string
+                    type: integer
                   timeleft:
                     type: string
+                required:
+                - duration
                 type: object
+              createNamespace:
+                type: boolean
               foo:
                 description: Foo is an example field of Troubleshooter. Edit troubleshooter_types.go
                   to remove/update

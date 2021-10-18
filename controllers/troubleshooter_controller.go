@@ -19,11 +19,14 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -36,13 +39,15 @@ type TroubleshooterReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 
-	reconTally int
+	LabelSelector labels.Selector
+	reconTally    int
 }
 
 //+kubebuilder:rbac:groups=clusterops.simeonpoot.nl,resources=troubleshooters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=clusterops.simeonpoot.nl,resources=troubleshooters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=clusterops.simeonpoot.nl,resources=troubleshooters/finalizers,verbs=update
 //+kubebuilder:rbac:resources=pods,verbs=get;list;watch;create;update;delete
+//+kubebuilder:rbac:resources=namespaces,verbs=get;list;watch;create;update;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -70,10 +75,64 @@ func (r *TroubleshooterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 	log.Info("We've got the Troubleshooter CR, continuing")
 
+	// Check whether the 'incident-response' Namespace needs to be created / already present
+	// TODO: make function, create much needed tests
+	requiredLabel, err := labels.NewRequirement("clusterops.simeonpoot/name", selection.Equals, []string{"incident-response"})
+	if err != nil {
+		log.Info("something went wrong creating labelselector for namespace reconciliation", "error", err)
+	}
+
+	ns := &corev1.NamespaceList{}
+	if err := r.List(ctx, ns, &client.ListOptions{
+		LabelSelector: labels.NewSelector().Add(*requiredLabel),
+	}); err != nil {
+		log.Info("something went wrong getting namespaces", "error", err)
+	}
+
+	// If we have other namespaces with the same 'labels', how to handle this?!
+
+	if len(ns.Items) == 0 {
+		fmt.Println("Incident-response namespace is not present, reconciling")
+		if cr.Spec.CreateNamespace {
+			fmt.Println("creating namespace")
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "incident-response",
+					Labels: map[string]string{
+						"clusterops.simeonpoot/name": "incident-response",
+					},
+				},
+			}
+			fmt.Println("Namespace to create: ", ns)
+			err := r.Create(ctx, ns, &client.CreateOptions{})
+			if err != nil {
+				log.Info("error creating a namespace", "error", err)
+				return ctrl.Result{}, nil
+			}
+		}
+		// Need Tests, condition is not needed... if there are
+		// else {
+		// 	if len(ns.Items) > 0 {
+		// 		for _, i := range ns.Items {
+		// 			if i.Name != "incident-response" && !cr.Spec.CreateNamespace {
+		// 				// return ctrl.Result{}, nil
+		// 				break
+		// 			}
+		// 		}
+		// 	}
+		// }
+
+		// check if it wanted 'true'
+	}
+
+	// TODO: wait on status namespace creation
+
+	fmt.Println(ns)
+	fmt.Println(len(ns.Items))
 	// TODO: Use labelselector to collect/filter pods?
 	// TODO: create function for it.
 	pods := &corev1.PodList{}
-	err := r.List(ctx, pods, &client.ListOptions{
+	err = r.List(ctx, pods, &client.ListOptions{
 		Namespace: req.Namespace,
 		// LabelSelector: r.ClusterLabelSelector,
 	})
@@ -82,10 +141,47 @@ func (r *TroubleshooterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	duration := cr.Spec.Session.Duration
 	for _, i := range pods.Items {
-		if i.Name == cr.Spec.PodName {
-			log.Info("Pod already present!!", "error", err)
-			return ctrl.Result{}, nil
+		if i.Name == cr.Spec.PodName && i.Namespace == "incident-response" {
+			log.Info("Created at: ", i.GetCreationTimestamp().Rfc3339Copy().Time.String(), err)
+			// fmt.Println(i.CreationTimestamp == metav1.Now())
+
+			// timeCreated := time.Time.String(i.CreationTimestamp.Time)
+			timeCreated := i.GetCreationTimestamp().Rfc3339Copy().Time
+			fmt.Println("time created: ", timeCreated)
+
+			timeNow := time.Now()
+			fmt.Println("time now:", timeNow)
+
+			fmt.Println("time expected to end session:", timeCreated.Add(time.Minute*time.Duration(duration)))
+			timeCreated = timeCreated.Add(time.Minute * time.Duration(duration))
+
+			if timeCreated.Before(timeNow) {
+				fmt.Println("TTL Session have been expired. \ntimeCreated + duration window is less than timeNow, so the TTL should be expired, delete Pod")
+				// r.Delete(ctx, &i, &client.DeleteOptions{})
+				if err := r.Delete(ctx, &i, &client.DeleteOptions{}); err != nil {
+					fmt.Println("error deleting the pod!")
+					log.Info("error deleting the pod", "error", err)
+					// TODO: wait for status!
+				}
+				return ctrl.Result{}, nil
+			} else {
+				fmt.Println("still in the durationwindow of the session, requeue on the time-difference")
+				//TODO: we need tests; otherwise we can get into a pickle:
+				// If reconcile syncPeriod takes longer than the TTL of the session,
+				// Reconcile syncPeriod takes presedent, meaning, the session will
+				// take longer than the configured TTL.
+				// Example: reconcile every 1hr, TTL is on 20m, this means the session should end within
+				// 20minutes, but the reconcile will pick it up after an hour.
+				// return ctrl.Result{RequeueAfter: time.Duration(duration) * time.Minute}, nil
+			}
+			log.Info("Pod already present!! session not yet expired", "error", err)
+			return ctrl.Result{RequeueAfter: time.Duration(duration) * time.Minute}, nil // TODO: we need to test this!
+			// diff := timeCreated - timeNow
+			// fmt.Println("diff:", diff)
+			// log.Info("Pod already present!!", "error", err)
+			// return ctrl.Result{}, nil
 		}
 	}
 
@@ -93,15 +189,16 @@ func (r *TroubleshooterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// TODO: create UID per Pod, to make session unique.
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cr.Spec.PodName},
+			Name:      cr.Spec.PodName,
+			Namespace: "incident-response"},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				corev1.Container{
 					Image: cr.Spec.Image,
 					Name:  cr.Spec.Foo}}}}
-	pod.Namespace = cr.Namespace
+	// pod.Namespace = cr.Namespace
 
-	fmt.Println(pod)
+	fmt.Println("Creating pod: ", pod.Name)
 	if err := r.Create(ctx, pod, &client.CreateOptions{}); err != nil {
 		log.Info("unable to get create Pod ", "error", err)
 		return ctrl.Result{}, nil
@@ -110,6 +207,8 @@ func (r *TroubleshooterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	fmt.Println(pod)
 
 	return ctrl.Result{}, nil
+
+	// delete
 }
 
 // SetupWithManager sets up the controller with the Manager.
